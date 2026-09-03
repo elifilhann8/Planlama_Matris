@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <title>Danışman Planlama & Çekirdek Matrisi</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { background-color: #121212; color: #e0e0e0; font-family: system-ui, sans-serif; }
+    .neon-aura {
+      box-shadow: 0 0 12px var(--aura-color, rgba(0, 240, 255, 0.35)), inset 0 0 6px var(--aura-color, rgba(0, 240, 255, 0.2));
+      border: 1px solid var(--aura-color, rgba(0, 240, 255, 0.6));
+    }
+    .neon-card:hover {
+      filter: brightness(1.2);
+      transform: translateY(-1px);
+      transition: all 0.15s ease-in-out;
+    }
+    .other-month {
+      background-color: #141414 !important;
+      opacity: 0.4;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col p-4 select-none">
+
+  <!-- Üst Kontrol Barı -->
+  <header class="flex flex-wrap items-center justify-between pb-4 border-b border-zinc-800 gap-3">
+    <div class="flex items-center space-x-3">
+      <div class="relative">
+        <button id="month-year-btn" onclick="toggleMonthPicker()" class="text-xl font-bold tracking-wide text-white hover:text-cyan-400 flex items-center gap-2 transition px-2 py-1 rounded hover:bg-zinc-800">
+          <span id="header-date">Ağustos 2026</span>
+          <span class="text-xs text-zinc-500">▼</span>
+        </button>
+        <div id="month-picker" class="absolute left-0 top-full mt-2 bg-zinc-900 border border-zinc-700 rounded-lg p-3 shadow-2xl z-50 hidden w-64 space-y-3">
+          <div class="flex justify-between items-center pb-2 border-b border-zinc-800">
+            <span class="text-xs font-semibold text-zinc-400">Hızlı Ay / Yıl Zıplama</span>
+            <input id="picker-year" type="number" class="w-20 bg-zinc-800 border border-zinc-700 rounded px-2 py-0.5 text-xs text-center text-white" value="2026" onchange="changeYear(this.value)">
+          </div>
+          <div class="grid grid-cols-3 gap-1.5 text-xs text-center" id="month-buttons"></div>
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-1">
+        <button onclick="changeMonth(-1)" class="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-300 text-sm font-bold">‹</button>
+        <button onclick="goToToday()" class="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-300 text-xs font-semibold">Bugün</button>
+        <button onclick="changeMonth(1)" class="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-300 text-sm font-bold">›</button>
+      </div>
+
+      <span class="text-xs px-2.5 py-1 bg-zinc-800 text-cyan-400 rounded-full border border-zinc-700 hidden sm:inline-block">Ekip Matrisi Aktif</span>
+    </div>
+
+    <div class="flex items-center space-x-2">
+      <button onclick="exportData()" class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded text-sm transition">Dışa Aktar</button>
+      <label class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded text-sm transition cursor-pointer">
+        İçe Aktar <input type="file" id="import-file" class="hidden" onchange="importData(event)">
+      </label>
+    </div>
+  </header>
+
+  <!-- Pazartesi Başlangıçlı Gün Başlıkları -->
+  <div class="grid grid-cols-7 gap-px bg-zinc-800 mt-4 text-center text-xs font-semibold text-zinc-400 py-2">
+    <div>Pzt</div><div>Sal</div><div>Çar</div><div>Per</div><div>Cum</div><div>Cmt</div><div>Paz</div>
+  </div>
+
+  <!-- Dinamik Takvim Izgarası -->
+  <div id="calendar-grid" class="grid grid-cols-7 gap-px bg-zinc-800 flex-1 min-h-[640px] border border-zinc-800 mt-1"></div>
+
+  <!-- Dinamik Firma ve Çekirdek Modül Ekleme Modalı -->
+  <div id="modal" class="fixed inset-0 bg-black/80 hidden items-center justify-center p-4 z-50">
+    <div class="bg-zinc-900 border border-zinc-700 p-6 rounded-lg w-full max-w-sm space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between pb-2 border-b border-zinc-800">
+        <h3 class="text-sm font-bold text-white uppercase tracking-wider">Firma & Ekip Planlama</h3>
+        <button onclick="closeModal()" class="text-zinc-500 hover:text-white text-lg font-mono">✕</button>
+      </div>
+
+      <!-- Tarih Göstergesi -->
+      <div>
+        <label class="text-xs text-zinc-400 block mb-1">Seçilen Tarih</label>
+        <div class="w-full bg-zinc-800/80 border border-cyan-500/40 rounded p-2 text-sm text-cyan-300 font-semibold flex items-center justify-between">
+          <span id="modal-date-text">--</span>
+          <span class="text-[10px] text-zinc-500 font-mono">Otomatik</span>
+        </div>
+      </div>
+
+      <!-- Firma Seçimi / Yeni Firma Girişi -->
+      <div>
+        <label class="text-xs text-zinc-400 block mb-1">Danışman Firma</label>
+        <select id="company-select" class="w-full bg-zinc-800 border border-zinc-700 rounded p-2 text-sm text-white focus:outline-none mb-2" onchange="checkNewCompany(this.value)">
+        </select>
+        <input id="new-company-input" type="text" placeholder="Yeni Firma Adı Yazın..." class="w-full bg-zinc-800 border border-zinc-700 rounded p-2 text-xs text-white focus:outline-none focus:border-cyan-500 hidden uppercase">
+      </div>
+
+      <!-- Sabit Modüller (SD, FI, PP) -->
+      <div>
+        <label class="text-xs text-zinc-400 block mb-2">Çalışacak Uzmanlık Ekipleri</label>
+        <div class="grid grid-cols-3 gap-2">
+          <label class="flex items-center justify-center p-2 rounded bg-zinc-800 border border-zinc-700 cursor-pointer hover:border-sky-400 transition">
+            <input type="checkbox" id="mod-sd" value="SD" class="mr-1.5 accent-sky-400">
+            <span class="text-xs font-bold text-sky-400">SD</span>
+          </label>
+          <label class="flex items-center justify-center p-2 rounded bg-zinc-800 border border-zinc-700 cursor-pointer hover:border-amber-500 transition">
+            <input type="checkbox" id="mod-fi" value="FI" class="mr-1.5 accent-amber-500">
+            <span class="text-xs font-bold text-amber-400">FI</span>
+          </label>
+          <label class="flex items-center justify-center p-2 rounded bg-zinc-800 border border-zinc-700 cursor-pointer hover:border-red-500 transition">
+            <input type="checkbox" id="mod-pp" value="PP" class="mr-1.5 accent-red-500">
+            <span class="text-xs font-bold text-red-400">PP</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="flex justify-end space-x-2 pt-2">
+        <button onclick="closeModal()" class="px-3 py-1.5 text-zinc-400 hover:text-white text-xs">İptal</button>
+        <button onclick="saveAssignment()" class="px-4 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold rounded shadow-lg shadow-cyan-600/30">Kaydet & Ekle</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const monthNames = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
+    
+    // Otomatik Neon Renk Havuzu
+    const auraColors = [
+      { name: "Cyan", border: "rgba(0, 240, 255, 0.6)", shadow: "rgba(0, 240, 255, 0.35)", text: "#22d3ee" },
+      { name: "Amber", border: "rgba(245, 158, 11, 0.6)", shadow: "rgba(245, 158, 11, 0.35)", text: "#fbbf24" },
+      { name: "Purple", border: "rgba(168, 85, 247, 0.6)", shadow: "rgba(168, 85, 247, 0.35)", text: "#c084fc" },
+      { name: "Emerald", border: "rgba(16, 185, 129, 0.6)", shadow: "rgba(16, 185, 129, 0.35)", text: "#34d399" },
+      { name: "Rose", border: "rgba(244, 63, 94, 0.6)", shadow: "rgba(244, 63, 94, 0.35)", text: "#fb7185" }
+    ];
+
+    let currentDate = new Date(2026, 7, 1);
+    let selectedDateISO = "";
+
+    // Kayıtlı Firmalar Havuzu
+    let companies = JSON.parse(localStorage.getItem('danisman_companies')) || [
+      { name: "ARETE", colorIndex: 0 },
+      { name: "NEGZEL", colorIndex: 1 },
+      { name: "SPECTRUM", colorIndex: 2 },
+      { name: "UISAP", colorIndex: 3 }
+    ];
+
+    // Kayıtlı Takvim Planları
+    let events = JSON.parse(localStorage.getItem('danisman_matrix_events')) || [
+      { date: "2026-08-31", company: "ARETE", modules: ["SD"] },
+      { date: "2026-09-01", company: "ARETE", modules: ["PP"] },
+      { date: "2026-09-01", company: "NEGZEL", modules: ["SD"] },
+      { date: "2026-09-02", company: "ARETE", modules: ["FI"] },
+      { date: "2026-09-02", company: "NEGZEL", modules: ["SD"] },
+      { date: "2026-09-03", company: "ARETE", modules: ["SD"] },
+      { date: "2026-09-03", company: "NEGZEL", modules: ["PP"] }
+    ];
+
+    function persistState() {
+      localStorage.setItem('danisman_companies', JSON.stringify(companies));
+      localStorage.setItem('danisman_matrix_events', JSON.stringify(events));
+    }
+
+    function populateCompanySelect() {
+      const select = document.getElementById('company-select');
+      select.innerHTML = '';
+      companies.forEach(comp => {
+        const opt = document.createElement('option');
+        opt.value = comp.name;
+        opt.innerText = comp.name;
+        select.appendChild(opt);
+      });
+      const addOpt = document.createElement('option');
+      addOpt.value = "__NEW__";
+      addOpt.innerText = "+ Yeni Firma Ekle...";
+      select.appendChild(addOpt);
+    }
+
+    function checkNewCompany(val) {
+      const input = document.getElementById('new-company-input');
+      if (val === "__NEW__") {
+        input.classList.remove('hidden');
+        input.focus();
+      } else {
+        input.classList.add('hidden');
+      }
+    }
+
+    function renderCalendar() {
+      const year = currentDate.getFullYear();
+      const month = currentDate.getMonth();
+
+      document.getElementById('header-date').innerText = `${monthNames[month]} ${year}`;
+      document.getElementById('picker-year').value = year;
+
+      const grid = document.getElementById('calendar-grid');
+      grid.innerHTML = '';
+
+      let firstDayIndex = new Date(year, month, 1).getDay() - 1;
+      if (firstDayIndex === -1) firstDayIndex = 6;
+
+      const totalDaysInMonth = new Date(year, month + 1, 0).getDate();
+      const prevMonthTotalDays = new Date(year, month, 0).getDate();
+
+      const totalCells = 42;
+
+      for (let i = 0; i < totalCells; i++) {
+        let cellYear = year;
+        let cellMonth = month;
+        let cellDate = 1;
+        let isCurrentMonth = true;
+
+        if (i < firstDayIndex) {
+          cellDate = prevMonthTotalDays - (firstDayIndex - i - 1);
+          cellMonth = month - 1;
+          if (cellMonth < 0) { cellMonth = 11; cellYear--; }
+          isCurrentMonth = false;
+        } else if (i >= firstDayIndex + totalDaysInMonth) {
+          cellDate = i - (firstDayIndex + totalDaysInMonth) + 1;
+          cellMonth = month + 1;
+          if (cellMonth > 11) { cellMonth = 0; cellYear++; }
+          isCurrentMonth = false;
+        } else {
+          cellDate = i - firstDayIndex + 1;
+        }
+
+        const dateISO = `${cellYear}-${String(cellMonth + 1).padStart(2, '0')}-${String(cellDate).padStart(2, '0')}`;
+
+        const cell = document.createElement('div');
+        cell.className = `bg-[#181818] p-1.5 flex flex-col justify-between relative group hover:bg-[#202020] transition cursor-pointer min-h-[105px] ${!isCurrentMonth ? 'other-month' : ''}`;
+        cell.onclick = () => onDayClick(dateISO, cellDate, cellMonth, cellYear);
+
+        const num = document.createElement('span');
+        num.className = `text-xs font-mono self-end ${isCurrentMonth ? 'text-zinc-400 font-semibold' : 'text-zinc-600'}`;
+        num.innerText = cellDate;
+        cell.appendChild(num);
+
+        const dayEvents = events.filter(e => e.date === dateISO);
+        const container = document.createElement('div');
+        container.className = 'space-y-1 mt-auto w-full';
+
+        dayEvents.forEach((evt, idx) => {
+          const compInfo = companies.find(c => c.name === evt.company) || { colorIndex: 0 };
+          const theme = auraColors[compInfo.colorIndex % auraColors.length];
+
+          const block = document.createElement('div');
+          block.className = 'neon-aura neon-card rounded px-1.5 py-1 text-[10px] flex items-center justify-between';
+          block.style.setProperty('--aura-color', theme.shadow);
+          block.style.borderColor = theme.border;
+
+          const compSpan = document.createElement('span');
+          compSpan.className = 'font-bold uppercase tracking-wider';
+          compSpan.style.color = theme.text;
+          compSpan.innerText = evt.company;
+
+          const modContainer = document.createElement('div');
+          modContainer.className = 'flex items-center space-x-1';
+
+          evt.modules.forEach(m => {
+            const mBadge = document.createElement('span');
+            let mColor = "bg-sky-400 text-black";
+            if (m === "FI") mColor = "bg-amber-500 text-black";
+            if (m === "PP") mColor = "bg-red-500 text-white";
+            mBadge.className = `${mColor} px-1 rounded-[2px] font-mono font-bold text-[9px]`;
+            mBadge.innerText = m;
+            modContainer.appendChild(mBadge);
+          });
+
+          const delBtn = document.createElement('span');
+          delBtn.className = 'opacity-0 group-hover:opacity-60 hover:opacity-100 text-zinc-400 ml-1 text-[9px] font-mono';
+          delBtn.innerText = '✕';
+          delBtn.onclick = (e) => deleteAssignment(e, dateISO, idx);
+          modContainer.appendChild(delBtn);
+
+          block.appendChild(compSpan);
+          block.appendChild(modContainer);
+          container.appendChild(block);
+        });
+
+        cell.appendChild(container);
+        grid.appendChild(cell);
+      }
+    }
+
+    function onDayClick(dateISO, day, month, year) {
+      selectedDateISO = dateISO;
+      document.getElementById('modal-date-text').innerText = `${day} ${monthNames[month]} ${year}`;
+      document.getElementById('mod-sd').checked = false;
+      document.getElementById('mod-fi').checked = false;
+      document.getElementById('mod-pp').checked = false;
+      document.getElementById('new-company-input').value = '';
+      document.getElementById('new-company-input').classList.add('hidden');
+      populateCompanySelect();
+      openModal();
+    }
+
+    function saveAssignment() {
+      let compSelect = document.getElementById('company-select').value;
+      if (compSelect === "__NEW__") {
+        const inputVal = document.getElementById('new-company-input').value.trim().toUpperCase();
+        if (!inputVal) return alert("Lütfen yeni firma adını yazın!");
+        const newColorIdx = companies.length;
+        companies.push({ name: inputVal, colorIndex: newColorIdx });
+        compSelect = inputVal;
+      }
+
+      const mods = [];
+      if (document.getElementById('mod-sd').checked) mods.push("SD");
+      if (document.getElementById('mod-fi').checked) mods.push("FI");
+      if (document.getElementById('mod-pp').checked) mods.push("PP");
+
+      if (mods.length === 0) return alert("Lütfen en az bir ekip (SD, FI, PP) seçin!");
+
+      const existing = events.find(e => e.date === selectedDateISO && e.company === compSelect);
+      if (existing) {
+        mods.forEach(m => {
+          if (!existing.modules.includes(m)) existing.modules.push(m);
+        });
+      } else {
+        events.push({ date: selectedDateISO, company: compSelect, modules: mods });
+      }
+
+      persistState();
+      closeModal();
+      renderCalendar();
+    }
+
+    function deleteAssignment(e, dateISO, idx) {
+      e.stopPropagation();
+      const matched = events.filter(ev => ev.date === dateISO)[idx];
+      const realIndex = events.indexOf(matched);
+      if (realIndex > -1) {
+        events.splice(realIndex, 1);
+        persistState();
+        renderCalendar();
+      }
+    }
+
+    function changeMonth(step) { currentDate.setMonth(currentDate.getMonth() + step); renderCalendar(); }
+    function goToToday() { currentDate = new Date(); renderCalendar(); }
+    function changeYear(val) { currentDate.setFullYear(parseInt(val)); renderCalendar(); }
+    function jumpToMonth(idx) { currentDate.setMonth(idx); toggleMonthPicker(); renderCalendar(); }
+    function toggleMonthPicker() { document.getElementById('month-picker').classList.toggle('hidden'); }
+
+    function setupMonthPickerButtons() {
+      const container = document.getElementById('month-buttons');
+      container.innerHTML = '';
+      monthNames.forEach((name, idx) => {
+        const btn = document.createElement('button');
+        btn.className = 'py-1 px-2 rounded bg-zinc-800 hover:bg-cyan-700 hover:text-white transition text-zinc-300';
+        btn.innerText = name.substring(0, 3);
+        btn.onclick = () => jumpToMonth(idx);
+        container.appendChild(btn);
+      });
+    }
+
+    function openModal() { document.getElementById('modal').classList.remove('hidden'); document.getElementById('modal').classList.add('flex'); }
+    function closeModal() { document.getElementById('modal').classList.add('hidden'); document.getElementById('modal').classList.remove('flex'); }
+
+    function exportData() {
+      const exportObj = { companies, events };
+      const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `danisman_matris_${currentDate.getFullYear()}_${currentDate.getMonth()+1}.json`;
+      a.click();
+    }
+
+    function importData(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const parsed = JSON.parse(e.target.result);
+          if (parsed.companies && parsed.events) {
+            companies = parsed.companies;
+            events = parsed.events;
+            persistState();
+            renderCalendar();
+          }
+        } catch (err) {
+          alert('Geçersiz dosya içeriği!');
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    setupMonthPickerButtons();
+    renderCalendar();
+  </script>
+</body>
+</html>
