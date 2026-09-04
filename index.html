@@ -28,13 +28,17 @@
     <div class="flex items-center space-x-3">
       <div class="relative">
         <button id="month-year-btn" onclick="toggleMonthPicker()" class="text-xl font-bold tracking-wide text-white hover:text-cyan-400 flex items-center gap-2 transition px-2 py-1 rounded hover:bg-zinc-800">
-          <span id="header-date">Ağustos 2026</span>
+          <span id="header-date">--</span>
           <span class="text-xs text-zinc-500">▼</span>
         </button>
         <div id="month-picker" class="absolute left-0 top-full mt-2 bg-zinc-900 border border-zinc-700 rounded-lg p-3 shadow-2xl z-50 hidden w-64 space-y-3">
           <div class="flex justify-between items-center pb-2 border-b border-zinc-800">
-            <span class="text-xs font-semibold text-zinc-400">Hızlı Ay / Yıl Zıplama</span>
-            <input id="picker-year" type="number" class="w-20 bg-zinc-800 border border-zinc-700 rounded px-2 py-0.5 text-xs text-center text-white" value="2026" onchange="changeYear(this.value)">
+            <span class="text-xs font-semibold text-zinc-400">Yıl / Ay Seçimi</span>
+            <div class="flex items-center space-x-1">
+              <button onclick="stepYear(-1)" class="px-2 py-0.5 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-300 text-xs font-bold">‹</button>
+              <input id="picker-year" type="number" min="2000" max="2100" class="w-20 bg-zinc-800 border border-zinc-700 rounded px-2 py-0.5 text-xs text-center text-white focus:outline-none focus:border-cyan-400 font-bold" onchange="changeYear(this.value)">
+              <button onclick="stepYear(1)" class="px-2 py-0.5 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-300 text-xs font-bold">›</button>
+            </div>
           </div>
           <div class="grid grid-cols-3 gap-1.5 text-xs text-center" id="month-buttons"></div>
         </div>
@@ -118,8 +122,7 @@
 
   <script>
     const monthNames = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
-    
-    // Otomatik Neon Renk Havuzu
+
     const auraColors = [
       { name: "Cyan", border: "rgba(0, 240, 255, 0.6)", shadow: "rgba(0, 240, 255, 0.35)", text: "#22d3ee" },
       { name: "Amber", border: "rgba(245, 158, 11, 0.6)", shadow: "rgba(245, 158, 11, 0.35)", text: "#fbbf24" },
@@ -128,10 +131,9 @@
       { name: "Rose", border: "rgba(244, 63, 94, 0.6)", shadow: "rgba(244, 63, 94, 0.35)", text: "#fb7185" }
     ];
 
-  let currentDate = new Date();
+    let currentDate = new Date();
     let selectedDateISO = "";
 
-    // Kayıtlı Firmalar Havuzu
     let companies = JSON.parse(localStorage.getItem('danisman_companies')) || [
       { name: "ARETE", colorIndex: 0 },
       { name: "NEGZEL", colorIndex: 1 },
@@ -139,7 +141,6 @@
       { name: "UISAP", colorIndex: 3 }
     ];
 
-    // Kayıtlı Takvim Planları
     let events = JSON.parse(localStorage.getItem('danisman_matrix_events')) || [
       { date: "2026-08-31", company: "ARETE", modules: ["SD"] },
       { date: "2026-09-01", company: "ARETE", modules: ["PP"] },
@@ -185,7 +186,8 @@
       const month = currentDate.getMonth();
 
       document.getElementById('header-date').innerText = `${monthNames[month]} ${year}`;
-      document.getElementById('picker-year').value = year;
+      const pickerYear = document.getElementById('picker-year');
+      if (pickerYear) pickerYear.value = year;
 
       const grid = document.getElementById('calendar-grid');
       grid.innerHTML = '';
@@ -330,26 +332,60 @@
       }
     }
 
-    function changeMonth(step) { currentDate.setMonth(currentDate.getMonth() + step); renderCalendar(); }
-    function goToToday() { currentDate = new Date(); renderCalendar(); }
-    function changeYear(val) { currentDate.setFullYear(parseInt(val)); renderCalendar(); }
-    function jumpToMonth(idx) { currentDate.setMonth(idx); toggleMonthPicker(); renderCalendar(); }
-    function toggleMonthPicker() { document.getElementById('month-picker').classList.toggle('hidden'); }
+    function changeMonth(step) {
+      currentDate.setMonth(currentDate.getMonth() + step);
+      renderCalendar();
+    }
+
+    function goToToday() {
+      currentDate = new Date();
+      renderCalendar();
+    }
+
+    function changeYear(val) {
+      const parsedYear = parseInt(val, 10);
+      if (!isNaN(parsedYear) && parsedYear >= 2000) {
+        currentDate.setFullYear(parsedYear);
+        renderCalendar();
+      }
+    }
+
+    function stepYear(step) {
+      currentDate.setFullYear(currentDate.getFullYear() + step);
+      renderCalendar();
+    }
+
+    function jumpToMonth(idx) {
+      currentDate.setMonth(idx);
+      toggleMonthPicker();
+      renderCalendar();
+    }
+
+    function toggleMonthPicker() {
+      document.getElementById('month-picker').classList.toggle('hidden');
+    }
 
     function setupMonthPickerButtons() {
       const container = document.getElementById('month-buttons');
       container.innerHTML = '';
       monthNames.forEach((name, idx) => {
         const btn = document.createElement('button');
-        btn.className = 'py-1 px-2 rounded bg-zinc-800 hover:bg-cyan-700 hover:text-white transition text-zinc-300';
-        btn.innerText = name.substring(0, 3);
+        btn.className = 'py-1.5 px-2 rounded bg-zinc-800 hover:bg-cyan-700 hover:text-white transition text-zinc-300 text-xs font-semibold';
+        btn.innerText = name;
         btn.onclick = () => jumpToMonth(idx);
         container.appendChild(btn);
       });
     }
 
-    function openModal() { document.getElementById('modal').classList.remove('hidden'); document.getElementById('modal').classList.add('flex'); }
-    function closeModal() { document.getElementById('modal').classList.add('hidden'); document.getElementById('modal').classList.remove('flex'); }
+    function openModal() {
+      document.getElementById('modal').classList.remove('hidden');
+      document.getElementById('modal').classList.add('flex');
+    }
+
+    function closeModal() {
+      document.getElementById('modal').classList.add('hidden');
+      document.getElementById('modal').classList.remove('flex');
+    }
 
     function exportData() {
       const exportObj = { companies, events };
